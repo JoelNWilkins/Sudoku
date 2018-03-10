@@ -7,12 +7,16 @@ from tkinter import font
 import csv
 import os
 import sys
+import subprocess
 import shutil
 import time
 import pickle
 from copy import deepcopy
 
 appData = os.getenv("LOCALAPPDATA")
+
+sys.stdout = open(appData+"\\Sudoku\\Sudoku.txt", "w")
+sys.stderr = open(appData+"\\Sudoku\\Sudoku.txt", "w")
 
 if not "Sudoku" in os.listdir(appData):
     os.makedirs(appData+"\\Sudoku\\")
@@ -22,9 +26,23 @@ if not "Puzzles" in os.listdir(appData+"\\Sudoku\\"):
     
 if not "programData.pkl" in os.listdir(appData+"\\Sudoku\\"):
     data = {"filename": appData+"\\Sudoku\\Puzzles\\Easy\\Easy 1.puz",
-            "timer": True, "position": True}
+            "timer": True, "position": True, "location": os.getcwd()}
     
     pickle.dump(data, open(appData+"\\Sudoku\\programData.pkl", "wb"))
+
+try:
+    data = pickle.load(open(appData+"\\Sudoku\\programData.pkl", "rb"))
+    os.chdir(data["location"])
+except:
+    pass
+
+DETACHED_PROCESS = 0x00000008
+if subprocess.call("assoc .puz", creationflags=DETACHED_PROCESS, shell=True):
+    subprocess.call("assoc .puz=puz_file", creationflags=DETACHED_PROCESS,
+                    shell=True)
+    subprocess.call("ftype puz_file=\"{}\\Sudoku.exe %1\""
+                    .format(data["location"]), creationflags=DETACHED_PROCESS,
+                    shell=True)
 
 class Sudoku(tk.Tk):
     def __init__(self, *args, **kwargs):
@@ -187,7 +205,7 @@ Do you want to save your solution?""".format(minutes, seconds))
             fileName = self.fileName
             
         data = {"filename": fileName, "timer": self.timerVar.get(),
-                "position": self.positionVar.get()}
+                "position": self.positionVar.get(), "location": os.getcwd()}
         
         pickle.dump(data, open(self.directory+"programData.pkl", "wb"))
 
