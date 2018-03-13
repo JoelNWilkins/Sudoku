@@ -12,11 +12,12 @@ import shutil
 import time
 import pickle
 from copy import deepcopy
+from collections import Counter
 
 appData = os.getenv("LOCALAPPDATA")
 
-sys.stdout = open(appData+"\\Sudoku\\Sudoku.txt", "w")
-sys.stderr = open(appData+"\\Sudoku\\Sudoku.txt", "w")
+#sys.stdout = open(appData+"\\Sudoku\\Sudoku.txt", "w")
+#sys.stderr = open(appData+"\\Sudoku\\Sudoku.txt", "w")
 
 if not "Sudoku" in os.listdir(appData):
     os.makedirs(appData+"\\Sudoku\\")
@@ -53,6 +54,14 @@ class Sudoku(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self.closeWindow)
 
         self.resizable(False, False)
+
+        self.timerVar = tk.BooleanVar()
+        self.positionVar = tk.BooleanVar()
+        self.errorVar = tk.BooleanVar()
+
+        self.timerVar.set(True)
+        self.positionVar.set(True)
+        self.errorVar.set(True)
 
         self.menuBar = MenuBar(self)
 
@@ -166,7 +175,8 @@ You have completed the sudoku in {} minutes and {} seconds.
 Do you want to save your solution?""".format(minutes, seconds))
             else:
                 save = messagebox.askyesnocancel("Congratulations!",
-"""Congratulations! You have completed the sudoku.
+"""Congratulations!
+You have completed the sudoku.
 Do you want to save your solution?""".format(minutes, seconds))
 
             if save != None:
@@ -175,7 +185,7 @@ Do you want to save your solution?""".format(minutes, seconds))
                 self.statusBar.pause()
         else:
             messagebox.showinfo("Not quite.",
-                "Not quite. There is an error in your solution.")
+"Not quite. There is an error in your solution.")
 
     def helpWindow(self, *args, **kwargs):
         pass
@@ -189,6 +199,9 @@ Do you want to save your solution?""".format(minutes, seconds))
 
     def updatePos(self, *args, **kwargs):
         self.statusBar.updatePos()
+
+    def updateErrors(self, *args, **kwargs):
+        self.gridFrame.updateErrors()
 
     def updateStatus(self, *args, **kwargs):
         self.statusBar.updateStatus()
@@ -205,16 +218,33 @@ Do you want to save your solution?""".format(minutes, seconds))
             fileName = self.fileName
             
         data = {"filename": fileName, "timer": self.timerVar.get(),
-                "position": self.positionVar.get(), "location": os.getcwd()}
+                "position": self.positionVar.get(),
+                "error": self.errorVar.get(), "location": os.getcwd()}
         
         pickle.dump(data, open(self.directory+"programData.pkl", "wb"))
 
     def loadData(self, *args, **kwargs):
         data = pickle.load(open(self.directory+"programData.pkl", "rb"))
 
-        fileName = data["filename"]
-        self.timerVar.set(data["timer"])
-        self.positionVar.set(data["position"])
+        try:
+            fileName = data["filename"]
+        except:
+            pass
+
+        try:
+            self.timerVar.set(data["timer"])
+        except:
+            pass
+
+        try:
+            self.positionVar.set(data["position"])
+        except:
+            pass
+
+        try:
+            self.errorVar.set(data["error"])
+        except:
+            pass
 
         self.updateStatus()
 
@@ -225,18 +255,16 @@ Do you want to save your solution?""".format(minutes, seconds))
 
 class GridFrame(tk.LabelFrame):
     def __init__(self, parent, *args, **kwargs):
-        tk.Frame.__init__(self, parent, *args, **kwargs)
-
-        self.parent = parent
+        tk.Frame.__init__(self, *args, master=parent, **kwargs)
 
         self.frame = tk.Frame(self, borderwidth=2, relief="solid",
                               highlightbackground="BLACK")
         self.frame.grid(row=0, column=0, sticky="nsew")
 
         self.normalFont = font.Font(family="Courier", size=18, weight="normal")
-        self.boldFont = font.Font(family="Courier",
+        self.boldFont = font.Font(family=self.normalFont["family"],
                                   size=self.normalFont["size"], weight="bold")
-        self.smallFont = font.Font(family="Courier",
+        self.smallFont = font.Font(family=self.normalFont["family"],
                                    size=int(self.normalFont["size"]/3))
 
         self.lineColour = "BLACK"
@@ -268,13 +296,13 @@ class GridFrame(tk.LabelFrame):
 
         self.newFile()
 
-        self.parent.bind("<Key>", self.keyPressed)
-        self.parent.bind("<Button-1>", self.callback)
-        self.parent.bind("<Up>", self.upKey)
-        self.parent.bind("<Down>", self.downKey)
-        self.parent.bind("<Left>", self.leftKey)
-        self.parent.bind("<Right>", self.rightKey)
-        self.parent.bind("<BackSpace>", self.backSpaceKey)
+        self.master.bind("<Key>", self.keyPressed)
+        self.master.bind("<Button-1>", self.callback)
+        self.master.bind("<Up>", self.upKey)
+        self.master.bind("<Down>", self.downKey)
+        self.master.bind("<Left>", self.leftKey)
+        self.master.bind("<Right>", self.rightKey)
+        self.master.bind("<BackSpace>", self.backSpaceKey)
 
     def update(self, *args, **kwargs):
         self.cells = []
@@ -305,13 +333,16 @@ class GridFrame(tk.LabelFrame):
                                               font=self.smallFont)
                 else:
                     self.cells[r][c].set(0)
+                    
+        self.updateErrors()
 
     def updateCells(self, *args, **kwargs):
         for row in self.cells:
             for cell in row:
                 cell.update()
 
-        self.parent.updatePos()
+        self.master.updatePos()
+        self.updateErrors()
 
     def keyPressed(self, event):
         key = event.char
@@ -342,6 +373,8 @@ class GridFrame(tk.LabelFrame):
                 self.cells[r][c].possible(self.possible[r][c],
                                           font=self.smallFont)
                 self.cells[r][c].update()
+
+        self.updateErrors()
 
     def callback(self, event):
         self.focus_set()
@@ -393,6 +426,8 @@ class GridFrame(tk.LabelFrame):
 
             self.cells[r][c].set(0)
 
+        self.updateErrors()
+
     def newFile(self, *args, **kwargs):
         self.start = []
         self.grid = []
@@ -406,8 +441,8 @@ class GridFrame(tk.LabelFrame):
                 self.grid[r].append(0)
                 self.possible[r].append([])
 
-        self.parent.fileName = None
-        self.parent.title("Untitled - Sudoku")
+        self.master.fileName = None
+        self.master.title("Untitled - Sudoku")
 
         self.initialStart = deepcopy(self.start)
         self.initialGrid = deepcopy(self.grid)
@@ -416,7 +451,7 @@ class GridFrame(tk.LabelFrame):
         self.update()
 
     def openFile(self, *args, **kwargs):
-        oldFileName = self.parent.fileName
+        oldFileName = self.master.fileName
         oldStart = deepcopy(self.start)
         oldGrid = deepcopy(self.grid)
         oldPossible = deepcopy(self.possible)
@@ -428,8 +463,8 @@ class GridFrame(tk.LabelFrame):
         if "fileName" in kwargs.keys():
             fileName = kwargs["fileName"]
         if fileName == None:
-            fileName = askopenfilename(parent=self.parent,
-                                       initialdir=self.parent.directory
+            fileName = askopenfilename(parent=self.master,
+                                       initialdir=self.master.directory
                                        + "\\Puzzles\\",
                                        filetypes=[("Puzzle Files", "*.puz")],
                                        defaultextension=".puz")
@@ -465,19 +500,19 @@ class GridFrame(tk.LabelFrame):
                             minutes = 0
                             seconds = 0
 
-            self.parent.fileName = fileName
+            self.master.fileName = fileName
             if "\\" in fileName:
-                self.parent.title("{} - Sudoku".format(fileName.split("\\")[-1]
+                self.master.title("{} - Sudoku".format(fileName.split("\\")[-1]
                                                        .replace(".puz", "")))
             else:
-                self.parent.title("{} - Sudoku".format(fileName.split("/")[-1]
+                self.master.title("{} - Sudoku".format(fileName.split("/")[-1]
                                                        .replace(".puz", "")))
 
             self.initialStart = deepcopy(self.start)
             self.initialGrid = deepcopy(self.grid)
             self.initialPossible = deepcopy(self.possible)
 
-            self.parent.saveData(fileName=fileName)
+            self.master.saveData(fileName=fileName)
                 
         except FileNotFoundError:
             self.parent.fileName = oldFileName
@@ -506,8 +541,8 @@ class GridFrame(tk.LabelFrame):
         if "fileName" in kwargs.keys():
             fileName = kwargs["fileName"]
         if fileName == None:
-            fileName = asksaveasfilename(parent=self.parent,
-                                         initialdir=self.parent.directory
+            fileName = asksaveasfilename(parent=self.master,
+                                         initialdir=self.master.directory
                                          + "\\Puzzles\\",
                                          filetypes=[("Puzzle Files", "*.puz")],
                                          defaultextension=".puz")
@@ -540,35 +575,35 @@ class GridFrame(tk.LabelFrame):
                     
                     r += 1
 
-                m, s = self.parent.getTime()
+                m, s = self.master.getTime()
                 if minutes != 0 or seconds != 0:
                     csvwriter.writerow([minutes, seconds])
                 else:
                     csvwriter.writerow([m, s])
 
-            self.parent.fileName = fileName
+            self.master.fileName = fileName
             if "\\" in fileName:
-                self.parent.title("{} - Sudoku".format(fileName.split("\\")[-1]
+                self.master.title("{} - Sudoku".format(fileName.split("\\")[-1]
                                                        .replace(".puz", "")))
             else:
-                self.parent.title("{} - Sudoku".format(fileName.split("/")[-1]
+                self.master.title("{} - Sudoku".format(fileName.split("/")[-1]
                                                        .replace(".puz", "")))
 
             self.initialStart = deepcopy(self.start)
             self.initialGrid = deepcopy(self.grid)
             self.initialPossible = deepcopy(self.possible)
 
-            self.parent.saveData()
+            self.master.saveData()
                 
         except PermissionError:
             messagebox.showerror("Permission Error",
-    "Sudoku is unable to save to this file as it is open in another program.")
+"Sudoku is unable to save to this file as it is open in another program.")
         except FileNotFoundError:
             pass
 
     def createSudoku(self, *args, **kwargs):
-        fileName = asksaveasfilename(parent=self.parent,
-                                     initialdir=self.parent.directory
+        fileName = asksaveasfilename(parent=self.master,
+                                     initialdir=self.master.directory
                                      + "\\Puzzles\\",
                                      filetypes=[("Puzzle Files", "*.puz")],
                                      defaultextension=".puz")
@@ -635,6 +670,47 @@ class GridFrame(tk.LabelFrame):
             box.extend(self.grid[3*(i//3)+n][3*(i%3):3*(i%3)+3])
         return box
 
+    def findErrors(self, *args, **kwargs):
+        errors = []
+        for i in range(9):
+            row = self.grid[i]
+            freq = Counter(row)
+            count = 0
+            for item in row:
+                if freq[item] > 1:
+                    errors.append([i, count])
+                count += 1
+                
+            column = self.getCol(i)
+            freq = Counter(column)
+            count = 0
+            for item in column:
+                if freq[item] > 1:
+                    errors.append([count, i])
+                count += 1
+                
+            box = self.getBox(i)
+            freq = Counter(box)
+            count = 0
+            for item in box:
+                if freq[item] > 1:
+                    errors.append([3*(i//3)+count//3, 3*(i%3)+count%3])
+                count += 1
+        return errors
+
+    def updateErrors(self, *args, **kwargs):
+        if self.master.errorVar.get():
+            errors = self.findErrors()
+        else:
+            errors = []
+            
+        for row in range(9):
+            for column in range(9):
+                if [row, column] in errors and self.start[row][column] == 0:
+                    self.cells[row][column].config(fg="red")
+                else:
+                    self.cells[row][column].config(fg="black")
+
     def modified(self, *args, **kwargs):
         if self.initialStart != self.start:
             return True
@@ -646,19 +722,25 @@ class GridFrame(tk.LabelFrame):
 
 class Cell(tk.Radiobutton):
     def __init__(self, parent, *args, **kwargs):
-        tk.Radiobutton.__init__(self, parent, *args, **kwargs)
-        
-        self.parent = parent
+        tk.Radiobutton.__init__(self, *args, master=parent, **kwargs)
 
         if "variable" in kwargs.keys():
             self.variable = kwargs["variable"]
         if "value" in kwargs.keys():
             self.value = kwargs["value"]
+        if "command" in kwargs.keys():
+            self.command = kwargs["command"]
+
+        self.config(command=self.press)
 
         self.background = self.cget("background")
         self.activebackground = self.cget("activebackground")
         
         self.numbers = []
+
+    def press(self, *args, **kwargs):
+        self.update()
+        self.command()
 
     def set(self, number):
         if number == 0:
@@ -684,11 +766,11 @@ class Cell(tk.Radiobutton):
         self.numbers = []
         for number in range(1, 10):
             if number in numbers:
-                self.numbers.append(tk.Label(self.parent, text=number,
+                self.numbers.append(tk.Label(self.master, text=number,
                                              borderwidth=0, padx=0, pady=0,
                                              font=fontStyle))
             else:
-                self.numbers.append(tk.Label(self.parent, text=" ",
+                self.numbers.append(tk.Label(self.master, text=" ",
                                              borderwidth=0, padx=0, pady=0,
                                              font=fontStyle))
                 
@@ -710,64 +792,59 @@ class Cell(tk.Radiobutton):
 
 class MenuBar(tk.Menu):
     def __init__(self, parent, *args, **kwargs):
-        tk.Menu.__init__(self, parent)
-        parent.config(menu=self)
-
-        self.parent = parent
-
+        tk.Menu.__init__(self, master=parent)
+        self.master.configure(menu=self)
+                
         self.fileMenu = tk.Menu(self, tearoff=False)
         self.fileMenu.add_command(label="New Sudoku", accelerator="Ctrl+N",
-                                  command=self.parent.newFile)
+                                  command=self.master.newFile)
         self.fileMenu.add_command(label="Open...", accelerator="Ctrl+O",
-                                  command=self.parent.openFile)
+                                  command=self.master.openFile)
         self.fileMenu.add_separator()
         self.fileMenu.add_command(label="Save", accelerator="Ctrl+S",
-                                  command=self.parent.saveFile)
+                                  command=self.master.saveFile)
         self.fileMenu.add_command(label="Save As...",
                                   accelerator="Ctrl+Shift+S",
-                                  command=self.parent.saveAsFile)
+                                  command=self.master.saveAsFile)
         self.fileMenu.add_command(label="Create Sudoku", accelerator="Ctrl+Z",
-                                  command=self.parent.createSudoku)
+                                  command=self.master.createSudoku)
         self.fileMenu.add_separator()
         self.fileMenu.add_command(label="Exit", accelerator="Alt+F4",
-                                  command=self.parent.closeWindow)
+                                  command=self.master.closeWindow)
         self.add_cascade(label="File", menu=self.fileMenu)
-
-        self.parent.timerVar = tk.BooleanVar()
-        self.parent.timerVar.set(True)
-        
-        self.parent.positionVar = tk.BooleanVar()
-        self.parent.positionVar.set(True)
 
         self.optionsMenu = tk.Menu(self, tearoff=False)
         self.optionsMenu.add_checkbutton(label="Timer",
-                                         variable=self.parent.timerVar,
-                                         command=self.parent.updateStatus)
+                                         variable=self.master.timerVar,
+                                         command=self.master.updateStatus)
         self.optionsMenu.add_checkbutton(label="Position",
-                                         variable=self.parent.positionVar,
-                                         command=self.parent.updateStatus)
+                                         variable=self.master.positionVar,
+                                         command=self.master.updateStatus)
+        self.optionsMenu.add_checkbutton(label="Error Highlighting",
+                                         variable=self.master.errorVar,
+                                         command=self.master.updateErrors)
         self.optionsMenu.add_separator()
         self.optionsMenu.add_command(label="Reset", accelerator="Ctrl+R",
-                                     command=self.parent.reset)
+                                     command=self.master.reset)
         self.optionsMenu.add_command(label="Check", accelerator="Ctrl+Enter",
-                                     command=self.parent.check)
+                                     command=self.master.check)
         self.optionsMenu.add_command(label="Play / Pause", accelerator="Space",
-                                     command=self.parent.toggle)
+                                     command=self.master.toggle)
         self.add_cascade(label="Options", menu=self.optionsMenu)
         
-        #self.add_command(label="Help", command=self.parent.helpWindow)
+        #self.add_command(label="Help", command=self.master.helpWindow)
 
-        self.parent.bind("<Control-n>", self.parent.newFile)
-        self.parent.bind("<Control-o>", self.parent.openFile)
-        self.parent.bind("<Control-s>", self.parent.saveFile)
-        self.parent.bind("<Control-Shift-S>", self.parent.saveAsFile)
-        self.parent.bind("<Control-z>", self.parent.createSudoku)          
-        self.parent.bind("<Alt-F4>", self.parent.closeWindow)
-        self.parent.bind("<Control-w>", self.parent.closeWindow)
-        self.parent.bind("<Control-r>", self.parent.reset)
-        self.parent.bind("<Control-Return>", self.parent.check)
-        self.parent.bind("<Control-KP_Enter>", self.parent.check)
-        self.parent.bind("<space>", self.parent.toggle)
+        self.master.bind("<Control-n>", self.master.newFile)
+        self.master.bind("<Control-o>", self.master.openFile)
+        self.master.bind("<Control-s>", self.master.saveFile)
+        self.master.bind("<Control-Shift-S>", self.master.saveAsFile)
+        self.master.bind("<Control-z>", self.master.createSudoku)          
+        self.master.bind("<Alt-F4>", self.master.closeWindow)
+        self.master.bind("<Control-w>", self.master.closeWindow)
+        self.master.bind("<Control-r>", self.master.reset)
+        self.master.bind("<Control-Return>", self.master.check)
+        self.master.bind("<Control-KP_Enter>", self.master.check)
+        self.master.bind("<space>", self.master.toggle)
 
 class StatusBar(tk.Frame):
     def __init__(self, parent, *args, **kwargs):
