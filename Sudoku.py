@@ -4,12 +4,11 @@ from tkinter.filedialog import askopenfilename, asksaveasfilename
 from tkinter import messagebox
 from tkinter import font
 
-import csv
 import os
 import sys
-import subprocess
 import shutil
-import time
+import subprocess
+import csv
 import pickle
 from copy import deepcopy
 from collections import Counter
@@ -111,21 +110,25 @@ class Sudoku(tk.Tk):
 
     def saveFile(self, *args, **kwargs):
         minutes, seconds = self.statusBar.getTime()
+        status = self.statusBar.getStatus()
         self.statusBar.pause()
         
         self.gridFrame.saveAsFile(*args, minutes=minutes, seconds=seconds,
                                   fileName=self.fileName, **kwargs)
 
-        self.statusBar.play()
+        if status == "play":
+            self.statusBar.play()
 
     def saveAsFile(self, *args, **kwargs):
         minutes, seconds = self.statusBar.getTime()
+        status = self.statusBar.getStatus()
         self.statusBar.pause()
         
         self.gridFrame.saveAsFile(*args, minutes=minutes, seconds=seconds,
                                   **kwargs)
 
-        self.statusBar.play()
+        if status == "play":
+            self.statusBar.play()
 
     def createSudoku(self, *args, **kwargs):
         self.gridFrame.createSudoku(*args, **kwargs)
@@ -915,6 +918,9 @@ class StatusBar(tk.Frame):
                 self.selected.pack_forget()
             except:
                 pass
+
+    def getStatus(self, *args, **kwargs):
+        return self.timer.status
 
     def redraw(self, *args, **kwargs):
         self.timer.update()
