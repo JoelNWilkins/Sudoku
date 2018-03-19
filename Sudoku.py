@@ -10,8 +10,12 @@ import shutil
 import subprocess
 import csv
 import pickle
+import time
+import math
 from copy import deepcopy
 from collections import Counter
+
+import solver
 
 appData = os.getenv("LOCALAPPDATA")
 
@@ -62,6 +66,8 @@ class Sudoku(tk.Tk):
         self.positionVar.set(True)
         self.errorVar.set(True)
 
+        self.timerLabel = "Play / Pause"
+
         self.menuBar = MenuBar(self)
 
         self.gridFrame = GridFrame(self)
@@ -72,8 +78,13 @@ class Sudoku(tk.Tk):
         else:
             self.directory = os.getcwd()
 
-        self.statusBar = StatusBar(self)
+        self.statusBar = StatusBar(self, command=self.timerStatus)
         self.statusBar.pack(side="bottom", fill="x", expand=True)
+
+        if self.statusBar.getStatus() == "play":
+            self.timerLabel = "Pause"
+        else:
+            self.timerLabel = "Play"
 
         fileName = None
         if "fileName" in kwargs.keys():
@@ -150,6 +161,45 @@ class Sudoku(tk.Tk):
         else:
             self.destroy()
 
+    def saveData(self, *args, **kwargs):
+        if "fileName" in kwargs.keys():
+            fileName = kwargs["fileName"]
+        else:
+            fileName = self.fileName
+            
+        data = {"filename": fileName, "timer": self.timerVar.get(),
+                "position": self.positionVar.get(),
+                "error": self.errorVar.get(), "location": os.getcwd()}
+        
+        pickle.dump(data, open(self.directory+"programData.pkl", "wb"))
+
+    def loadData(self, *args, **kwargs):
+        data = pickle.load(open(self.directory+"programData.pkl", "rb"))
+
+        try:
+            fileName = data["filename"]
+        except:
+            pass
+
+        try:
+            self.timerVar.set(data["timer"])
+        except:
+            pass
+
+        try:
+            self.positionVar.set(data["position"])
+        except:
+            pass
+
+        try:
+            self.errorVar.set(data["error"])
+        except:
+            pass
+
+        self.updateStatus()
+
+        return fileName
+
     def reset(self, *args, **kwargs):
         resetSudoku = messagebox.askyesnocancel("Reset?",
 """Are you sure you want to reset this puzzle?
@@ -190,9 +240,25 @@ Do you want to save your solution?""".format(minutes, seconds))
             messagebox.showinfo("Not quite.",
 "Not quite. There is an error in your solution.")
 
-    def helpWindow(self, *args, **kwargs):
-        pass
-        #window = HelpWindow()
+    def solve(self, *args, **kwargs):
+        start = time.time()
+        
+        s = solver.Solver(self.gridFrame.start)
+        
+        (self.gridFrame.start, self.gridFrame.grid,
+         self.gridFrame.possible) = s.solve()
+
+        elapsed = time.time() - start
+        
+        self.gridFrame.update()
+
+        if s.check() and self.timerVar.get():
+            messagebox.showinfo("Solved",
+"The sudoku was solved in {} seconds and {} milliseconds."
+    .format(int(math.floor(elapsed)), int(round(elapsed * 1000))))
+
+    def toggle(self, *args, **kwargs):
+        self.statusBar.toggle()
 
     def setTime(self, minutes, seconds, *args, **kwargs):
         self.statusBar.setTime(minutes, seconds)
@@ -214,47 +280,13 @@ Do you want to save your solution?""".format(minutes, seconds))
         else:
             self.statusBar.pack_forget()
 
-    def saveData(self, *args, **kwargs):
-        if "fileName" in kwargs.keys():
-            fileName = kwargs["fileName"]
+    def timerStatus(self, *args, **kwargs):
+        if self.statusBar.getStatus() == "play":
+            self.timerLabel = "Pause"
         else:
-            fileName = self.fileName
+            self.timerLabel = "Play"
             
-        data = {"filename": fileName, "timer": self.timerVar.get(),
-                "position": self.positionVar.get(),
-                "error": self.errorVar.get(), "location": os.getcwd()}
-        
-        pickle.dump(data, open(self.directory+"programData.pkl", "wb"))
-
-    def loadData(self, *args, **kwargs):
-        data = pickle.load(open(self.directory+"programData.pkl", "rb"))
-
-        try:
-            fileName = data["filename"]
-        except:
-            pass
-
-        try:
-            self.timerVar.set(data["timer"])
-        except:
-            pass
-
-        try:
-            self.positionVar.set(data["position"])
-        except:
-            pass
-
-        try:
-            self.errorVar.set(data["error"])
-        except:
-            pass
-
-        self.updateStatus()
-
-        return fileName
-
-    def toggle(self, *args, **kwargs):
-        self.statusBar.toggle()
+        self.menuBar.editMenu.entryconfig(0, label=str(self.timerLabel))
 
 class GridFrame(tk.LabelFrame):
     def __init__(self, parent, *args, **kwargs):
@@ -347,6 +379,9 @@ class GridFrame(tk.LabelFrame):
         self.master.updatePos()
         self.updateErrors()
 
+    def callback(self, event):
+        self.focus_set()
+
     def keyPressed(self, event):
         key = event.char
         shiftKeys = [')', '!', '"', '£', '$', '%', '^', '&', '*', '(']
@@ -378,9 +413,6 @@ class GridFrame(tk.LabelFrame):
                 self.cells[r][c].update()
 
         self.updateErrors()
-
-    def callback(self, event):
-        self.focus_set()
 
     def upKey(self, event):
         pos = self.position.get()
@@ -741,6 +773,9 @@ class Cell(tk.Radiobutton):
         
         self.numbers = []
 
+    def callback(self, event):
+        self.invoke()
+
     def press(self, *args, **kwargs):
         self.update()
         self.command()
@@ -782,9 +817,6 @@ class Cell(tk.Radiobutton):
 
             self.numbers[-1].bind("<Button-1>", self.callback)
 
-    def callback(self, event):
-        self.invoke()
-
     def update(self, *args, **kwargs):
         if self.variable.get() == self.value:
             for item in self.grid_slaves():
@@ -799,7 +831,7 @@ class MenuBar(tk.Menu):
         self.master.configure(menu=self)
                 
         self.fileMenu = tk.Menu(self, tearoff=False)
-        self.fileMenu.add_command(label="New Sudoku", accelerator="Ctrl+N",
+        self.fileMenu.add_command(label="Blank Sudoku", accelerator="Ctrl+B",
                                   command=self.master.newFile)
         self.fileMenu.add_command(label="Open...", accelerator="Ctrl+O",
                                   command=self.master.openFile)
@@ -816,6 +848,19 @@ class MenuBar(tk.Menu):
                                   command=self.master.closeWindow)
         self.add_cascade(label="File", menu=self.fileMenu)
 
+        self.editMenu = tk.Menu(self, tearoff=False,
+                                postcommand=self.master.timerStatus)
+        self.editMenu.add_command(label=str(self.master.timerLabel),
+                                  accelerator="Space",
+                                  command=self.master.toggle)
+        self.editMenu.add_command(label="Reset", accelerator="Ctrl+R",
+                                  command=self.master.reset)
+        self.editMenu.add_command(label="Check", accelerator="Ctrl+Enter",
+                                  command=self.master.check)
+        self.editMenu.add_command(label="Solve",accelerator="F5",
+                                  command=self.master.solve)
+        self.add_cascade(label="Edit", menu=self.editMenu)
+
         self.optionsMenu = tk.Menu(self, tearoff=False)
         self.optionsMenu.add_checkbutton(label="Timer",
                                          variable=self.master.timerVar,
@@ -826,18 +871,9 @@ class MenuBar(tk.Menu):
         self.optionsMenu.add_checkbutton(label="Error Highlighting",
                                          variable=self.master.errorVar,
                                          command=self.master.updateErrors)
-        self.optionsMenu.add_separator()
-        self.optionsMenu.add_command(label="Reset", accelerator="Ctrl+R",
-                                     command=self.master.reset)
-        self.optionsMenu.add_command(label="Check", accelerator="Ctrl+Enter",
-                                     command=self.master.check)
-        self.optionsMenu.add_command(label="Play / Pause", accelerator="Space",
-                                     command=self.master.toggle)
         self.add_cascade(label="Options", menu=self.optionsMenu)
         
-        #self.add_command(label="Help", command=self.master.helpWindow)
-
-        self.master.bind("<Control-n>", self.master.newFile)
+        self.master.bind("<Control-b>", self.master.newFile)
         self.master.bind("<Control-o>", self.master.openFile)
         self.master.bind("<Control-s>", self.master.saveFile)
         self.master.bind("<Control-Shift-S>", self.master.saveAsFile)
@@ -848,13 +884,19 @@ class MenuBar(tk.Menu):
         self.master.bind("<Control-Return>", self.master.check)
         self.master.bind("<Control-KP_Enter>", self.master.check)
         self.master.bind("<space>", self.master.toggle)
+        self.master.bind("<F5>", self.master.solve)
 
 class StatusBar(tk.Frame):
     def __init__(self, parent, *args, **kwargs):
+        if "command" in kwargs.keys():
+            self.command = kwargs.pop("command")
+        else:
+            self.command = None
+            
         tk.Frame.__init__(self, *args, master=parent, **kwargs)
 
         if self.master.timerVar.get():
-            self.timer = Timer(self)
+            self.timer = Timer(self, command=self.command)
             self.timer.pack(side="right")
         else:
             try:
@@ -927,6 +969,11 @@ class StatusBar(tk.Frame):
 
 class Timer(tk.Label):
     def __init__(self, parent, *args, **kwargs):
+        if "command" in kwargs.keys():
+            self.command = kwargs.pop("command")
+        else:
+            self.command = None
+            
         tk.Label.__init__(self, *args, master=parent, **kwargs)
 
         self.status = "play"
@@ -954,18 +1001,21 @@ class Timer(tk.Label):
         self.config(text="{}:{}".format(str(minutes).rjust(2, "0"),
                                         str(seconds).rjust(2, "0")))
 
+    def play(self, *args, **kwargs):
+        self.status = "play"
+
     def pause(self, *args, **kwargs):
         self.status = "pause"
         return self.getTime()
-
-    def play(self, *args, **kwargs):
-        self.status = "play"
 
     def toggle(self, *args, **kwargs):
         if self.status == "play":
             self.pause()
         else:
             self.play()
+
+        if self.command != None:
+            self.command()
 
     def setTime(self, minutes, seconds, *args, **kwargs):
         total = (60 * minutes) + seconds
@@ -977,20 +1027,12 @@ class Timer(tk.Label):
         seconds = elapsed % 60
         return (minutes, seconds)
 
-class HelpWindow(tk.Tk):
-    def __init__(self, *args, **kwargs):
-        tk.Tk.__init__(self, *args, **kwargs)
-        self.title("Help")
-
-        self.text = tk.Text(self, text=message)
-        self.text.pack(fill="both", expand=True)
-
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         fileName = sys.argv[1]
     else:
         fileName = None
         
-    root = Sudoku(directory=appData+"\\Sudoku",
+    root = Sudoku(directory=appData+"\\Sudoku\\",
                   fileName=fileName)
     root.mainloop()
