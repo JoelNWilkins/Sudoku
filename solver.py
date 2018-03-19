@@ -16,8 +16,6 @@ class Solver(object):
             self.findNumbers()
 
             if self.grid == old:
-                self.findNumbers1()
-
                 if self.grid == old:
                     run = False
             else:
@@ -45,61 +43,79 @@ class Solver(object):
                             or number in column) and self.start[r][c] == 0:
                         self.possible[r][c].append(number)
 
-    def findNumbers(self, *args, **kwargs):
-        for r in range(9):
-            for c in range(9):
+    def findRow(self, r):
+        for c in range(9):
+            if self.grid[r][c] == 0:
                 if len(self.possible[r][c]) == 1:
                     self.setNumber(r, c, self.possible[r][c][0])
+                else:
+                    for number in self.possible[r][c]:
+                        unique = True
+                        for x in range(9):
+                            if x != c:
+                                if number in self.possible[r][x]:
+                                    unique = False
+                                    break
+                                
+                        if unique == True:
+                            self.setNumber(r, c, number)
 
-    def findNumbers1(self, *args, **kwargs):
+    def findCol(self, c):
+        column = []
+        for r in range(9):
+            column.append(self.possible[r][c])
+                    
+        for r in range(9):
+            if self.grid[r][c] == 0:
+                if len(self.possible[r][c]) == 1:
+                    self.setNumber(r, c, self.possible[r][c][0])
+                else:
+                    for number in column[r]:
+                        unique = True
+                        for x in range(9):
+                            if x != r:
+                                if number in column[x]:
+                                    unique = False
+                                    break
+                                
+                        if unique == True:
+                            self.setNumber(r, c, number)
+
+    def findBox(self, i):
+        box = []
+        for n in range(9):
+            r = 3 * (i // 3) + n // 3
+            c = 3 * (i % 3) + n % 3
+            box.append(self.possible[r][c])
+            
+        for n in range(9):
+            r = 3 * (i // 3) + n // 3
+            c = 3 * (i % 3) + n % 3
+            if self.grid[r][c] == 0:
+                if len(self.possible[r][c]) == 1:
+                    self.setNumber(r, c, self.possible[r][c][0])
+                else:                
+                    for number in box[n]:
+                        unique = True
+                        for x in range(9):
+                            if x != n:
+                                if number in box[x]:
+                                    unique = False
+                                    break
+                                
+                        if unique == True:
+                            self.setNumber(r, c, number)
+
+    def findNumbers(self, *args, **kwargs):
         for i in range(9):
-            for c in range(9):
-                for number in self.possible[i][c]:
-                    unique = True
-                    for x in range(9):
-                        if x != c:
-                            if number in self.possible[i][x]:
-                                unique = False
-                                break
-                            
-                    if unique == True:
-                        self.setNumber(i, c, number)
+            if 0 in self.grid[i]:
+                self.findRow(i)
 
-            column = []
-            for n in range(9):
-                column.append(self.possible[n][i])
+            if 0 in self.getCol(i):
+                self.findCol(i)
 
-            for r in range(9):
-                for number in column[r]:
-                    unique = True
-                    for x in range(9):
-                        if x != r:
-                            if number in column[x]:
-                                unique = False
-                                break
-                            
-                    if unique == True:
-                        self.setNumber(r, i, number)
-
-            box = []
-            for n in range(9):
-                r = 3 * (i // 3) + n // 3
-                c = 3 * (i % 3) + n % 3
-                box.append(self.possible[r][c])
-                
-            for n in range(9):
-                for number in box[n]:
-                    unique = True
-                    for x in range(9):
-                        if x != n:
-                            if number in box[x]:
-                                unique = False
-                                break
-                            
-                    if unique == True:
-                        r = 3 * (i // 3) + n // 3
-                        c = 3 * (i % 3) + n % 3
-                        self.setNumber(r, c, number)
+            if 0 in self.getBox(i):
+                self.findBox(i)
 
     def getGrid(self, *args, **kwargs):
         return (self.start, self.grid, self.possible)

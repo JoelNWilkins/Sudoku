@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 from tkinter import messagebox
+from tkinter.colorchooser import askcolor
 from tkinter import font
 
 import os
@@ -30,7 +31,9 @@ if not "Puzzles" in os.listdir(appData+"\\Sudoku\\"):
     
 if not "programData.pkl" in os.listdir(appData+"\\Sudoku\\"):
     data = {"filename": appData+"\\Sudoku\\Puzzles\\Easy\\Easy 1.puz",
-            "timer": True, "position": True, "location": os.getcwd()}
+            "timer": True, "position": True, "location": os.getcwd(),
+            "style": {"size": 19, "colour": "#000000", "error": "#FF0000",
+                      "line": "#000000"}}
     
     pickle.dump(data, open(appData+"\\Sudoku\\programData.pkl", "wb"))
 
@@ -66,17 +69,26 @@ class Sudoku(tk.Tk):
         self.positionVar.set(True)
         self.errorVar.set(True)
 
+        self.style = {"size": 19, "colour": "#000000", "error": "#FF0000",
+                      "line": "#000000"}
+
+        if "directory" in kwargs.keys():
+            self.directory = kwargs["directory"]
+        else:
+            self.directory = os.getcwd()
+
+        fileName = None
+        if "fileName" in kwargs.keys():
+            fileName = kwargs["fileName"]
+        if fileName == None:
+            fileName = self.loadData()
+
         self.timerLabel = "Play / Pause"
 
         self.menuBar = MenuBar(self)
 
         self.gridFrame = GridFrame(self)
         self.gridFrame.pack(fill="both", expand=True)
-
-        if "directory" in kwargs.keys():
-            self.directory = kwargs["directory"]
-        else:
-            self.directory = os.getcwd()
 
         self.statusBar = StatusBar(self, command=self.timerStatus)
         self.statusBar.pack(side="bottom", fill="x", expand=True)
@@ -85,12 +97,6 @@ class Sudoku(tk.Tk):
             self.timerLabel = "Pause"
         else:
             self.timerLabel = "Play"
-
-        fileName = None
-        if "fileName" in kwargs.keys():
-            fileName = kwargs["fileName"]
-        if fileName == None:
-            fileName = self.loadData()
 
         try: 
             self.openFile(fileName=fileName)
@@ -168,7 +174,7 @@ class Sudoku(tk.Tk):
             fileName = self.fileName
             
         data = {"filename": fileName, "timer": self.timerVar.get(),
-                "position": self.positionVar.get(),
+                "position": self.positionVar.get(), "style": self.style,
                 "error": self.errorVar.get(), "location": os.getcwd()}
         
         pickle.dump(data, open(self.directory+"programData.pkl", "wb"))
@@ -187,6 +193,11 @@ class Sudoku(tk.Tk):
             pass
 
         try:
+            self.style = data["style"]
+        except:
+            pass
+
+        try:
             self.positionVar.set(data["position"])
         except:
             pass
@@ -196,7 +207,10 @@ class Sudoku(tk.Tk):
         except:
             pass
 
-        self.updateStatus()
+        try:
+            self.updateStatus()
+        except:
+            pass
 
         return fileName
 
@@ -214,7 +228,7 @@ This action cannot be undone.""")
                 for c in range(9):
                     self.gridFrame.possible[r].append([])
 
-            self.gridFrame.update()
+            self.gridFrame.updateGrid()
             self.statusBar.reset()
 
     def check(self, *args, **kwargs):
@@ -241,21 +255,30 @@ Do you want to save your solution?""".format(minutes, seconds))
 "Not quite. There is an error in your solution.")
 
     def solve(self, *args, **kwargs):
-        start = time.time()
+        self.statusBar.pause()
         
         s = solver.Solver(self.gridFrame.start)
+
+        start = time.time()
         
         (self.gridFrame.start, self.gridFrame.grid,
          self.gridFrame.possible) = s.solve()
 
         elapsed = time.time() - start
         
-        self.gridFrame.update()
+        self.gridFrame.updateGrid()
 
         if s.check() and self.timerVar.get():
+            if int(math.floor(elapsed)) == 0:
+                timeTaken = "{} milliseconds".format(int(round(elapsed * 1000)))
+            else:
+                timeTaken = ("{} seconds and {} milliseconds"
+                .format(int(math.floor(elapsed)), int(round(elapsed * 1000))))
             messagebox.showinfo("Solved",
-"The sudoku was solved in {} seconds and {} milliseconds."
-    .format(int(math.floor(elapsed)), int(round(elapsed * 1000))))
+"The sudoku was solved in {}.".format(timeTaken))
+
+        pos = self.gridFrame.position.get()
+        self.gridFrame.cells[int(pos[0])][int(pos[1])].invoke()
 
     def toggle(self, *args, **kwargs):
         self.statusBar.toggle()
@@ -265,6 +288,28 @@ Do you want to save your solution?""".format(minutes, seconds))
 
     def getTime(self, *args, **kwargs):
         return self.statusBar.getTime()
+
+    def resize(self, *args, **kwargs):
+        start = self.gridFrame.start
+        grid = self.gridFrame.grid
+        possible = self.gridFrame.possible
+        position = self.gridFrame.position.get()
+        title = self.title()
+        fileName = self.fileName
+
+        self.gridFrame.pack_forget()
+        self.gridFrame = GridFrame(self)
+        self.gridFrame.pack(fill="both", expand=True)
+
+        self.gridFrame.start = start
+        self.gridFrame.grid = grid
+        self.gridFrame.possible = possible
+        self.gridFrame.position.set(position)
+        self.title(title)
+        self.fileName = fileName
+
+        self.gridFrame.updateGrid()
+        self.gridFrame.cells[int(position[0])][int(position[1])].invoke()
 
     def updatePos(self, *args, **kwargs):
         self.statusBar.updatePos()
@@ -292,19 +337,25 @@ class GridFrame(tk.LabelFrame):
     def __init__(self, parent, *args, **kwargs):
         tk.Frame.__init__(self, *args, master=parent, **kwargs)
 
-        self.frame = tk.Frame(self, borderwidth=2, relief="solid",
-                              highlightbackground="BLACK")
+        self.lineColour = self.master.style["line"]
+        self.activeColour = "WHITE"
+        self.lineRelief = "solid"
+
+        self.frame = tk.Frame(self, relief=self.lineRelief,
+                              highlightthickness=2,
+                              highlightbackground=self.lineColour,
+                              highlightcolor=self.lineColour)
         self.frame.grid(row=0, column=0, sticky="nsew")
 
-        self.normalFont = font.Font(family="Courier", size=18, weight="normal")
+        self.normalFont = font.Font(family="Courier", weight="normal",
+                                    size=self.master.style["size"])
         self.boldFont = font.Font(family=self.normalFont["family"],
                                   size=self.normalFont["size"], weight="bold")
         self.smallFont = font.Font(family=self.normalFont["family"],
-                                   size=int(self.normalFont["size"]/3))
+                                   size=int((self.normalFont["size"] - 1) / 3))
 
-        self.lineColour = "BLACK"
-        self.activeColour = "WHITE"
-        self.lineRelief = "solid"
+        if self.normalFont["size"] > 22:
+            self.smallFont["size"] -= 1
         
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
@@ -331,6 +382,14 @@ class GridFrame(tk.LabelFrame):
 
         self.newFile()
 
+        self.master.unbind("<Key>")
+        self.master.unbind("<Button-1>")
+        self.master.unbind("<Up>")
+        self.master.unbind("<Down>")
+        self.master.unbind("<Left>")
+        self.master.unbind("<Right>")
+        self.master.unbind("<BackSpace>")
+
         self.master.bind("<Key>", self.keyPressed)
         self.master.bind("<Button-1>", self.callback)
         self.master.bind("<Up>", self.upKey)
@@ -339,7 +398,17 @@ class GridFrame(tk.LabelFrame):
         self.master.bind("<Right>", self.rightKey)
         self.master.bind("<BackSpace>", self.backSpaceKey)
 
-    def update(self, *args, **kwargs):
+    def updateGrid(self, *args, **kwargs):
+        self.normalFont = font.Font(family="Courier", weight="normal",
+                                    size=self.master.style["size"])
+        self.boldFont = font.Font(family=self.normalFont["family"],
+                                  size=self.normalFont["size"], weight="bold")
+        self.smallFont = font.Font(family=self.normalFont["family"],
+                                   size=int((self.normalFont["size"] - 1) / 3))
+
+        if self.normalFont["size"] > 22:
+            self.normalFont["size"] += 1
+        
         self.cells = []
         for r in range(9):
             self.cells.append([])
@@ -357,7 +426,7 @@ class GridFrame(tk.LabelFrame):
                                           relief=self.lineRelief,
                                           highlightbackground=self.lineColour,
                                           activebackground=self.activeColour,
-                                          indicatoron=0, width=2,
+                                          indicatoron=0, width=2, height=1,
                                           padx=0, pady=0))
                 self.cells[r][c].grid(row=r+r//3, column=c+c//3, sticky="nsew")
                 
@@ -378,6 +447,10 @@ class GridFrame(tk.LabelFrame):
 
         self.master.updatePos()
         self.updateErrors()
+
+    def changeSize(self, *args, **kwargs):
+        self.config(width=0, height=0)
+        self.frame.config(width=0, height=0)
 
     def callback(self, event):
         self.focus_set()
@@ -483,7 +556,7 @@ class GridFrame(tk.LabelFrame):
         self.initialGrid = deepcopy(self.grid)
         self.initialPossible = deepcopy(self.possible)
 
-        self.update()
+        self.updateGrid()
 
     def openFile(self, *args, **kwargs):
         oldFileName = self.master.fileName
@@ -550,13 +623,13 @@ class GridFrame(tk.LabelFrame):
             self.master.saveData(fileName=fileName)
                 
         except FileNotFoundError:
-            self.parent.fileName = oldFileName
+            self.master.fileName = oldFileName
             if "\\" in oldFileName:
-                self.parent.title("{} - Sudoku"
+                self.master.title("{} - Sudoku"
                                   .format(oldFileName.split("\\")[-1]
                                           .replace(".puz", "")))
             else:
-                self.parent.title("{} - Sudoku"
+                self.master.title("{} - Sudoku"
                                   .format(oldFileName.split("/")[-1]
                                           .replace(".puz", "")))
                 
@@ -568,7 +641,7 @@ class GridFrame(tk.LabelFrame):
             self.grid = deepcopy(oldGrid)
             self.possible = deepcopy(oldPossible)
 
-        self.update()
+        self.updateGrid()
         return (minutes, seconds)
 
     def saveAsFile(self, *args, **kwargs):
@@ -742,9 +815,11 @@ class GridFrame(tk.LabelFrame):
         for row in range(9):
             for column in range(9):
                 if [row, column] in errors and self.start[row][column] == 0:
-                    self.cells[row][column].config(fg="red")
+                    self.cells[row][column].config(
+                        fg=self.master.style["error"])
                 else:
-                    self.cells[row][column].config(fg="black")
+                    self.cells[row][column].config(
+                        fg=self.master.style["colour"])
 
     def modified(self, *args, **kwargs):
         if self.initialStart != self.start:
@@ -861,6 +936,8 @@ class MenuBar(tk.Menu):
                                   command=self.master.solve)
         self.add_cascade(label="Edit", menu=self.editMenu)
 
+        self.add_command(label="Format", command=self.format)
+
         self.optionsMenu = tk.Menu(self, tearoff=False)
         self.optionsMenu.add_checkbutton(label="Timer",
                                          variable=self.master.timerVar,
@@ -885,6 +962,15 @@ class MenuBar(tk.Menu):
         self.master.bind("<Control-KP_Enter>", self.master.check)
         self.master.bind("<space>", self.master.toggle)
         self.master.bind("<F5>", self.master.solve)
+
+    def format(self, *args, **kwargs):
+        def closeWindow(*args, **kwargs):
+            self.master.style = formatWindow.getStyle()
+            self.master.resize()
+            
+        formatWindow = FormatWindow(self.master, padx=7, pady=5,
+                                    defaults=self.master.style,
+                                    command=closeWindow)
 
 class StatusBar(tk.Frame):
     def __init__(self, parent, *args, **kwargs):
@@ -1026,6 +1112,114 @@ class Timer(tk.Label):
         minutes = elapsed // 60
         seconds = elapsed % 60
         return (minutes, seconds)
+
+class FormatWindow(tk.Toplevel):
+    def __init__(self, parent, *args, **kwargs):
+        if "defaults" in kwargs.keys():
+            self.style = kwargs.pop("defaults")
+        else:
+            self.style = {"size": 19, "colour": "#000000", "error": "#FF0000",
+                          "line": "#000000"}
+
+        if "colour" in self.style.keys():
+            self.colour = self.style["colour"]
+        else:
+            self.colour = "#000000"
+
+        if "error" in self.style.keys():
+            self.error = self.style["error"]
+        else:
+            self.error = "#FF0000"
+
+        if "line" in self.style.keys():
+            self.line = self.style["line"]
+        else:
+            self.line = "#FF0000"
+
+        if "command" in kwargs.keys():
+            self.command = kwargs.pop("command")
+        else:
+            self.command = None
+            
+        tk.Toplevel.__init__(self, *args, master=parent, **kwargs)
+        self.title("Format")
+
+        self.sizes = {"Small": 16, "Medium": 19, "Large": 22, "Huge": 25}
+
+        self.sizeLabel = tk.Label(self, text="Size: ")
+        self.sizeLabel.grid(row=0, column=0, sticky="e", pady=2)
+        self.sizeCombo = ttk.Combobox(self, values=list(self.sizes.keys()),
+                                      state="readonly")
+        self.sizeCombo.grid(row=0, column=1, sticky="ew", pady=2)
+        self.sizeCombo.set(list(self.sizes.keys())[list(self.sizes.values())
+                                                   .index(self.style["size"])])
+
+        self.colourLabel = tk.Label(self, text="Number Colour: ")
+        self.colourLabel.grid(row=1, column=0, sticky="e", pady=2)
+        self.colourButton = tk.Button(self, command=self.getNumberColour,
+                                      bg=self.colour)
+        self.colourButton.grid(row=1, column=1, sticky="ew", pady=2)
+
+        self.errorLabel = tk.Label(self, text="Error Colour: ")
+        self.errorLabel.grid(row=2, column=0, sticky="e", pady=2)
+        self.errorButton = tk.Button(self, command=self.getErrorColour,
+                                     bg=self.error)
+        self.errorButton.grid(row=2, column=1, sticky="ew", pady=2)
+
+        self.lineLabel = tk.Label(self, text="Line Colour: ")
+        self.lineLabel.grid(row=3, column=0, sticky="e", pady=2)
+        self.lineButton = tk.Button(self, command=self.getLineColour,
+                                     bg=self.line)
+        self.lineButton.grid(row=3, column=1, sticky="ew", pady=2)
+
+        self.buttonFrame = tk.Frame(self)
+        self.buttonFrame.grid(row=4, column=0, columnspan=2)
+        
+        self.okButton = ttk.Button(self.buttonFrame, text="Ok",
+                                   command=self.closeWindow)
+        self.okButton.grid(row=0, column=0, pady=2)
+        self.cancelButton = ttk.Button(self.buttonFrame, text="Cancel",
+                                       command=self.destroy)
+        self.cancelButton.grid(row=0, column=1, pady=2)
+
+        self.focus_force()
+
+    def getNumberColour(self, *args, **kwargs):
+        self.colour = askcolor(parent=self, color=self.colour)[1]
+
+        self.colourButton.config(bg=self.colour)
+
+        self.focus_force()
+
+    def getErrorColour(self, *args, **kwargs):
+        self.error = askcolor(parent=self, color=self.error)[1]
+
+        self.errorButton.config(bg=self.error)
+
+        self.focus_force()
+
+    def getLineColour(self, *args, **kwargs):
+        self.line = askcolor(parent=self, color=self.line)[1]
+
+        self.lineButton.config(bg=self.line)
+
+        self.focus_force()
+        
+    def setStyle(self, *args, **kwargs):
+        self.style = {"size": self.sizes[self.sizeCombo.get()],
+                      "colour": self.colour, "error": self.error,
+                      "line": self.line}
+
+    def getStyle(self, *args, **kwargs):
+        return self.style
+
+    def closeWindow(self, *args, **kwargs):
+        self.setStyle()
+        self.destroy()
+        self.master.saveData()
+
+        if self.command != None:
+            self.command()
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
