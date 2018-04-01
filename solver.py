@@ -1,4 +1,5 @@
 from copy import deepcopy
+from collections import Counter
 
 class Solver(object):
     def __init__(self, start):
@@ -60,12 +61,12 @@ class Solver(object):
                         if unique == True:
                             self.setNumber(r, c, number)
 
-    def findCol(self, c):
-        column = []
+    def findCol(self, c):                    
         for r in range(9):
-            column.append(self.possible[r][c])
-                    
-        for r in range(9):
+            column = []
+            for r in range(9):
+                column.append(self.possible[r][c])
+                
             if self.grid[r][c] == 0:
                 if len(self.possible[r][c]) == 1:
                     self.setNumber(r, c, self.possible[r][c][0])
@@ -81,14 +82,14 @@ class Solver(object):
                         if unique == True:
                             self.setNumber(r, c, number)
 
-    def findBox(self, i):
-        box = []
+    def findBox(self, i):            
         for n in range(9):
-            r = 3 * (i // 3) + n // 3
-            c = 3 * (i % 3) + n % 3
-            box.append(self.possible[r][c])
+            box = []
+            for a in range(9):
+                r = 3 * (i // 3) + a // 3
+                c = 3 * (i % 3) + a % 3
+                box.append(self.possible[r][c])
             
-        for n in range(9):
             r = 3 * (i // 3) + n // 3
             c = 3 * (i % 3) + n % 3
             if self.grid[r][c] == 0:

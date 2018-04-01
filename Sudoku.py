@@ -29,26 +29,29 @@ if not "Sudoku" in os.listdir(appData):
 if not "Puzzles" in os.listdir(appData+"\\Sudoku\\"):
     shutil.copytree(os.getcwd()+"\\Puzzles", appData+"\\Sudoku\\Puzzles")
     
-if not "programData.pkl" in os.listdir(appData+"\\Sudoku\\"):
+if (not "programData.pkl" in os.listdir(appData+"\\Sudoku\\")
+    or os.path.getsize(appData+"\\Sudoku\\programData.pkl") == 0):
     data = {"filename": appData+"\\Sudoku\\Puzzles\\Easy\\Easy 1.puz",
             "timer": True, "position": True, "location": os.getcwd(),
-            "style": {"size": 19, "colour": "#000000", "error": "#FF0000",
-                      "line": "#000000"}}
+            "style": {"size": 19, "width": 1, "colour": "#000000",
+                      "error": "#FF0000", "line": "#000000",
+                      "start": "#000000"}}
     
     pickle.dump(data, open(appData+"\\Sudoku\\programData.pkl", "wb"))
 
 try:
     data = pickle.load(open(appData+"\\Sudoku\\programData.pkl", "rb"))
     os.chdir(data["location"])
+    location = data["location"]
 except:
-    pass
+    location = os.getcwd()
 
 DETACHED_PROCESS = 0x00000008
 if subprocess.call("assoc .puz", creationflags=DETACHED_PROCESS, shell=True):
     subprocess.call("assoc .puz=puz_file", creationflags=DETACHED_PROCESS,
                     shell=True)
     subprocess.call("ftype puz_file=\"{}\\Sudoku.exe %1\""
-                    .format(data["location"]), creationflags=DETACHED_PROCESS,
+                    .format(location), creationflags=DETACHED_PROCESS,
                     shell=True)
 
 class Sudoku(tk.Tk):
@@ -69,8 +72,8 @@ class Sudoku(tk.Tk):
         self.positionVar.set(True)
         self.errorVar.set(True)
 
-        self.style = {"size": 19, "colour": "#000000", "error": "#FF0000",
-                      "line": "#000000"}
+        self.style = {"size": 19, "width": 1, "colour": "#000000",
+                      "error": "#FF0000", "line": "#000000", "start": "#000000"}
 
         if "directory" in kwargs.keys():
             self.directory = kwargs["directory"]
@@ -90,7 +93,11 @@ class Sudoku(tk.Tk):
         self.gridFrame = GridFrame(self)
         self.gridFrame.pack(fill="both", expand=True)
 
-        self.statusBar = StatusBar(self, command=self.timerStatus)
+        size = int(self.gridFrame.getSize()/2) - 2
+        if size < 8:
+            size = 8
+
+        self.statusBar = StatusBar(self, command=self.timerStatus, size=size)
         self.statusBar.pack(side="bottom", fill="x", expand=True)
 
         if self.statusBar.getStatus() == "play":
@@ -177,10 +184,10 @@ class Sudoku(tk.Tk):
                 "position": self.positionVar.get(), "style": self.style,
                 "error": self.errorVar.get(), "location": os.getcwd()}
         
-        pickle.dump(data, open(self.directory+"programData.pkl", "wb"))
+        pickle.dump(data, open(self.directory+"\\programData.pkl", "wb"))
 
     def loadData(self, *args, **kwargs):
-        data = pickle.load(open(self.directory+"programData.pkl", "rb"))
+        data = pickle.load(open(self.directory+"\\programData.pkl", "rb"))
 
         try:
             fileName = data["filename"]
@@ -311,6 +318,12 @@ Do you want to save your solution?""".format(minutes, seconds))
         self.gridFrame.updateGrid()
         self.gridFrame.cells[int(position[0])][int(position[1])].invoke()
 
+        size = int(self.gridFrame.getSize()/2) - 2
+        if size < 8:
+            size = 8
+
+        self.statusBar.setSize(size)
+
     def updatePos(self, *args, **kwargs):
         self.statusBar.updatePos()
 
@@ -338,11 +351,13 @@ class GridFrame(tk.LabelFrame):
         tk.Frame.__init__(self, *args, master=parent, **kwargs)
 
         self.lineColour = self.master.style["line"]
-        self.activeColour = "WHITE"
+        self.activeColour = "white"
         self.lineRelief = "solid"
 
+        width = int(self.master.style["width"])
+
         self.frame = tk.Frame(self, relief=self.lineRelief,
-                              highlightthickness=2,
+                              highlightthickness=int(1.5 * width) + 1,
                               highlightbackground=self.lineColour,
                               highlightcolor=self.lineColour)
         self.frame.grid(row=0, column=0, sticky="nsew")
@@ -363,19 +378,6 @@ class GridFrame(tk.LabelFrame):
         for n in range(9):
             self.frame.rowconfigure(n+n//3, weight=1)
             self.frame.columnconfigure(n+n//3, weight=1)
-
-        self.line1 = tk.Frame(self.frame, borderwidth=1, relief=self.lineRelief,
-                              background=self.lineColour, width=1)
-        self.line1.grid(row=0, column=3, rowspan=11, sticky="nsew")
-        self.line2 = tk.Frame(self.frame, borderwidth=1, relief=self.lineRelief,
-                              background=self.lineColour, width=1)
-        self.line2.grid(row=0, column=7, rowspan=11, sticky="nsew")
-        self.line3 = tk.Frame(self.frame, borderwidth=1, relief=self.lineRelief,
-                              background=self.lineColour, height=1)
-        self.line3.grid(row=3, column=0, columnspan=11, sticky="nsew")
-        self.line4 = tk.Frame(self.frame, borderwidth=1, relief=self.lineRelief,
-                              background=self.lineColour, height=1)
-        self.line4.grid(row=7, column=0, columnspan=11, sticky="nsew")
         
         self.position = tk.StringVar()
         self.position.set("00")
@@ -408,6 +410,24 @@ class GridFrame(tk.LabelFrame):
 
         if self.normalFont["size"] > 22:
             self.normalFont["size"] += 1
+
+        self.lineColour = self.master.style["line"]
+        width = int(self.master.style["width"])
+
+        self.frame.config(highlightthickness=int(1.5 * width) + 1)
+
+        self.line1 = tk.Frame(self.frame, borderwidth=0, relief=self.lineRelief,
+                              background=self.lineColour, width=width)
+        self.line1.grid(row=0, column=3, rowspan=11, sticky="nsew")
+        self.line2 = tk.Frame(self.frame, borderwidth=0, relief=self.lineRelief,
+                              background=self.lineColour, width=width)
+        self.line2.grid(row=0, column=7, rowspan=11, sticky="nsew")
+        self.line3 = tk.Frame(self.frame, borderwidth=0, relief=self.lineRelief,
+                              background=self.lineColour, height=width)
+        self.line3.grid(row=3, column=0, columnspan=11, sticky="nsew")
+        self.line4 = tk.Frame(self.frame, borderwidth=0, relief=self.lineRelief,
+                              background=self.lineColour, height=width)
+        self.line4.grid(row=7, column=0, columnspan=11, sticky="nsew")
         
         self.cells = []
         for r in range(9):
@@ -422,12 +442,13 @@ class GridFrame(tk.LabelFrame):
                                           variable=self.position,
                                           value=(str(r)+str(c)),
                                           command=self.updateCells,
-                                          font=fontStyle, borderwidth=1,
+                                          font=fontStyle, borderwidth=0,
                                           relief=self.lineRelief,
+                                          highlightthickness=width,
                                           highlightbackground=self.lineColour,
+                                          highlightcolor=self.lineColour,
                                           activebackground=self.activeColour,
-                                          indicatoron=0, width=2, height=1,
-                                          padx=0, pady=0))
+                                          width=2, height=1, padx=3, pady=3))
                 self.cells[r][c].grid(row=r+r//3, column=c+c//3, sticky="nsew")
                 
                 if self.grid[r][c] != 0:
@@ -437,6 +458,12 @@ class GridFrame(tk.LabelFrame):
                                               font=self.smallFont)
                 else:
                     self.cells[r][c].set(0)
+
+        try:
+            pos = self.position.get()
+            self.cells[int(pos[0])][int(pos[1])].invoke()
+        except:
+            pass
                     
         self.updateErrors()
 
@@ -623,19 +650,22 @@ class GridFrame(tk.LabelFrame):
             self.master.saveData(fileName=fileName)
                 
         except FileNotFoundError:
-            self.master.fileName = oldFileName
-            if "\\" in oldFileName:
-                self.master.title("{} - Sudoku"
-                                  .format(oldFileName.split("\\")[-1]
-                                          .replace(".puz", "")))
+            if oldFileName != None:
+                self.master.fileName = oldFileName
+                if "\\" in oldFileName:
+                    self.master.title("{} - Sudoku"
+                                      .format(oldFileName.split("\\")[-1]
+                                              .replace(".puz", "")))
+                else:
+                    self.master.title("{} - Sudoku"
+                                      .format(oldFileName.split("/")[-1]
+                                              .replace(".puz", "")))
+                    
+                self.start = deepcopy(oldStart)
+                self.grid = deepcopy(oldGrid)
+                self.possible = deepcopy(oldPossible)
             else:
-                self.master.title("{} - Sudoku"
-                                  .format(oldFileName.split("/")[-1]
-                                          .replace(".puz", "")))
-                
-            self.start = deepcopy(oldStart)
-            self.grid = deepcopy(oldGrid)
-            self.possible = deepcopy(oldPossible)
+                self.newFile()
         except:
             self.start = deepcopy(oldStart)
             self.grid = deepcopy(oldGrid)
@@ -814,7 +844,11 @@ class GridFrame(tk.LabelFrame):
             
         for row in range(9):
             for column in range(9):
-                if [row, column] in errors and self.start[row][column] == 0:
+                if self.start[row][column] != 0:
+                    self.cells[row][column].config(
+                        fg=self.master.style["start"])
+                elif ([row, column] in errors and self.start[row][column] == 0
+                    and self.grid[row][column] != 0):
                     self.cells[row][column].config(
                         fg=self.master.style["error"])
                 else:
@@ -830,28 +864,59 @@ class GridFrame(tk.LabelFrame):
             return True
         return False
 
+    def getSize(self, *args, **kwargs):
+        return self.normalFont["size"]
+
 class Cell(tk.Radiobutton):
     def __init__(self, parent, *args, **kwargs):
-        tk.Radiobutton.__init__(self, *args, master=parent, **kwargs)
-
         if "variable" in kwargs.keys():
-            self.variable = kwargs["variable"]
+            self.variable = kwargs.pop("variable")
         if "value" in kwargs.keys():
-            self.value = kwargs["value"]
+            self.value = kwargs.pop("value")
         if "command" in kwargs.keys():
-            self.command = kwargs["command"]
+            self.command = kwargs.pop("command")
+        if "background" in kwargs.keys():
+            self.background = kwargs.pop("background")
+        elif "bg" in kwargs.keys():
+            self.background = kwargs.pop("bg")
+        else:
+            self.background = parent.cget("bg")
+        if "activebackground" in kwargs.keys():
+            self.activebackground = kwargs.pop("activebackground")
+        else:
+            self.activebackground = self.background
 
-        self.config(command=self.press)
+        self.parent = tk.Frame(parent)
 
-        self.background = self.cget("background")
-        self.activebackground = self.cget("activebackground")
+        if "highlightthickness" in kwargs.keys():
+            bd = kwargs.pop("highlightthickness")
+            self.parent.config(padx=bd, pady=bd)
+        if "highlightcolor" in kwargs.keys():
+            bg = kwargs.pop("highlightcolor")
+            self.parent.config(bg=bg)
+        if "highlightbackground" in kwargs.keys():
+            bg = kwargs.pop("highlightbackground")
+            self.parent.config(bg=bg)
+            
+        tk.Label.__init__(self, *args, master=self.parent, **kwargs)
+        self.pack_configure(fill=tk.BOTH, expand=True)
         
         self.numbers = []
 
-    def callback(self, event):
-        self.invoke()
+        self.bind("<Button-1>", self.press)
+
+    def grid(self, *args, **kwargs):
+        self.parent.grid(*args, **kwargs)
+
+    def pack(self, *args, **kwargs):
+        self.parent.pack(*args, **kwargs)
+
+    def invoke(self, *args, **kwargs):
+        self.press()
 
     def press(self, *args, **kwargs):
+        self.config(bg=self.activebackground)
+        self.variable.set(self.value)
         self.update()
         self.command()
 
@@ -881,24 +946,28 @@ class Cell(tk.Radiobutton):
             if number in numbers:
                 self.numbers.append(tk.Label(self.master, text=number,
                                              borderwidth=0, padx=0, pady=0,
-                                             font=fontStyle))
+                                             font=fontStyle,
+                                             fg=self.cget("fg")))
             else:
                 self.numbers.append(tk.Label(self.master, text=" ",
                                              borderwidth=0, padx=0, pady=0,
-                                             font=fontStyle))
+                                             font=fontStyle,
+                                             fg=self.cget("fg")))
                 
             self.numbers[-1].grid(in_=self, row=(number-1)//3,
                                   column=(number-1)%3, sticky="nsew")
 
-            self.numbers[-1].bind("<Button-1>", self.callback)
+            self.numbers[-1].bind("<Button-1>", self.press)
 
     def update(self, *args, **kwargs):
         if self.variable.get() == self.value:
+            self.config(bg=self.activebackground)
             for item in self.grid_slaves():
-                item.configure(background=self.activebackground)
+                item.config(bg=self.activebackground)
         else:
+            self.config(bg=self.background)
             for item in self.grid_slaves():
-                item.configure(background=self.cget("background"))
+                item.config(bg=self.background)
 
 class MenuBar(tk.Menu):
     def __init__(self, parent, *args, **kwargs):
@@ -939,11 +1008,11 @@ class MenuBar(tk.Menu):
         self.add_command(label="Format", command=self.format)
 
         self.optionsMenu = tk.Menu(self, tearoff=False)
-        self.optionsMenu.add_checkbutton(label="Timer",
-                                         variable=self.master.timerVar,
-                                         command=self.master.updateStatus)
         self.optionsMenu.add_checkbutton(label="Position",
                                          variable=self.master.positionVar,
+                                         command=self.master.updateStatus)
+        self.optionsMenu.add_checkbutton(label="Timer",
+                                         variable=self.master.timerVar,
                                          command=self.master.updateStatus)
         self.optionsMenu.add_checkbutton(label="Error Highlighting",
                                          variable=self.master.errorVar,
@@ -978,11 +1047,18 @@ class StatusBar(tk.Frame):
             self.command = kwargs.pop("command")
         else:
             self.command = None
+
+        if "size" in kwargs.keys():
+            size = kwargs.pop("size")
+        else:
+            size = 12
+
+        self.font = font.Font(size=size)
             
         tk.Frame.__init__(self, *args, master=parent, **kwargs)
 
         if self.master.timerVar.get():
-            self.timer = Timer(self, command=self.command)
+            self.timer = Timer(self, command=self.command, font=self.font)
             self.timer.pack(side="right")
         else:
             try:
@@ -995,7 +1071,7 @@ class StatusBar(tk.Frame):
         column = int(pos[1]) + 1
 
         if self.master.positionVar.get():
-            self.selected = tk.Label(self,
+            self.selected = tk.Label(self, font=self.font,
                                      text="Row: {} Column: {}"
                                      .format(row, column))
             self.selected.pack(side="left")
@@ -1052,6 +1128,11 @@ class StatusBar(tk.Frame):
 
     def redraw(self, *args, **kwargs):
         self.timer.update()
+
+    def setSize(self, size):
+        self.font = font.Font(size=size)
+        self.timer.config(font=self.font)
+        self.selected.config(font=self.font)
 
 class Timer(tk.Label):
     def __init__(self, parent, *args, **kwargs):
@@ -1118,8 +1199,13 @@ class FormatWindow(tk.Toplevel):
         if "defaults" in kwargs.keys():
             self.style = kwargs.pop("defaults")
         else:
-            self.style = {"size": 19, "colour": "#000000", "error": "#FF0000",
-                          "line": "#000000"}
+            self.style = {"size": 19, "width": 1, "colour": "#000000",
+                          "error": "#FF0000", "line": "#000000"}
+
+        if "width" in self.style.keys():
+            width = self.style["width"]
+        else:
+            width = 1
 
         if "colour" in self.style.keys():
             self.colour = self.style["colour"]
@@ -1134,7 +1220,12 @@ class FormatWindow(tk.Toplevel):
         if "line" in self.style.keys():
             self.line = self.style["line"]
         else:
-            self.line = "#FF0000"
+            self.line = "#000000"
+
+        if "start" in self.style.keys():
+            self.start = self.style["start"]
+        else:
+            self.start = "#000000"
 
         if "command" in kwargs.keys():
             self.command = kwargs.pop("command")
@@ -1144,7 +1235,8 @@ class FormatWindow(tk.Toplevel):
         tk.Toplevel.__init__(self, *args, master=parent, **kwargs)
         self.title("Format")
 
-        self.sizes = {"Small": 16, "Medium": 19, "Large": 22, "Huge": 25}
+        self.sizes = {"Extra Small": 16, "Small": 19, "Medium": 22, "Large": 25,
+                      "Extra Large": 28, "Huge": 31, "Extra Huge": 34}
 
         self.sizeLabel = tk.Label(self, text="Size: ")
         self.sizeLabel.grid(row=0, column=0, sticky="e", pady=2)
@@ -1154,61 +1246,106 @@ class FormatWindow(tk.Toplevel):
         self.sizeCombo.set(list(self.sizes.keys())[list(self.sizes.values())
                                                    .index(self.style["size"])])
 
+        self.widthLabel = tk.Label(self, text="Line Width: ")
+        self.widthLabel.grid(row=1, column=0, sticky="e", pady=2)
+        self.widthCombo = ttk.Combobox(self, values=list(range(0, 6)),
+                                       state="readonly")
+        self.widthCombo.grid(row=1, column=1, sticky="ew", pady=2)
+        self.widthCombo.set(width)
+
+        self.startLabel = tk.Label(self, text="Start Colour: ")
+        self.startLabel.grid(row=2, column=0, sticky="e", pady=2)
+        self.startButton = tk.Button(self, command=self.getStartColour,
+                                     bg=self.start)
+        self.startButton.grid(row=2, column=1, sticky="ew", pady=2)
+
         self.colourLabel = tk.Label(self, text="Number Colour: ")
-        self.colourLabel.grid(row=1, column=0, sticky="e", pady=2)
+        self.colourLabel.grid(row=3, column=0, sticky="e", pady=2)
         self.colourButton = tk.Button(self, command=self.getNumberColour,
                                       bg=self.colour)
-        self.colourButton.grid(row=1, column=1, sticky="ew", pady=2)
+        self.colourButton.grid(row=3, column=1, sticky="ew", pady=2)
 
         self.errorLabel = tk.Label(self, text="Error Colour: ")
-        self.errorLabel.grid(row=2, column=0, sticky="e", pady=2)
+        self.errorLabel.grid(row=4, column=0, sticky="e", pady=2)
         self.errorButton = tk.Button(self, command=self.getErrorColour,
                                      bg=self.error)
-        self.errorButton.grid(row=2, column=1, sticky="ew", pady=2)
+        self.errorButton.grid(row=4, column=1, sticky="ew", pady=2)
 
         self.lineLabel = tk.Label(self, text="Line Colour: ")
-        self.lineLabel.grid(row=3, column=0, sticky="e", pady=2)
+        self.lineLabel.grid(row=5, column=0, sticky="e", pady=2)
         self.lineButton = tk.Button(self, command=self.getLineColour,
                                      bg=self.line)
-        self.lineButton.grid(row=3, column=1, sticky="ew", pady=2)
+        self.lineButton.grid(row=5, column=1, sticky="ew", pady=2)
 
         self.buttonFrame = tk.Frame(self)
-        self.buttonFrame.grid(row=4, column=0, columnspan=2)
+        self.buttonFrame.grid(row=6, column=0, columnspan=2)
         
         self.okButton = ttk.Button(self.buttonFrame, text="Ok",
                                    command=self.closeWindow)
-        self.okButton.grid(row=0, column=0, pady=2)
+        self.okButton.grid(row=0, column=0, padx=2, pady=2)
         self.cancelButton = ttk.Button(self.buttonFrame, text="Cancel",
                                        command=self.destroy)
-        self.cancelButton.grid(row=0, column=1, pady=2)
+        self.cancelButton.grid(row=0, column=1, padx=2, pady=2)
 
         self.focus_force()
 
     def getNumberColour(self, *args, **kwargs):
-        self.colour = askcolor(parent=self, color=self.colour)[1]
+        old = self.colour
+        
+        self.colour = askcolor(parent=self, color=self.colour,
+                               title="Number Colour")[1]
 
-        self.colourButton.config(bg=self.colour)
+        if self.colour != None:
+            self.colourButton.config(bg=self.colour)
+        else:
+            self.colour = old
 
         self.focus_force()
 
     def getErrorColour(self, *args, **kwargs):
-        self.error = askcolor(parent=self, color=self.error)[1]
+        old = self.error
+        
+        self.error = askcolor(parent=self, color=self.error,
+                              title="Error Colour")[1]
 
-        self.errorButton.config(bg=self.error)
+        if self.error != None:
+            self.errorButton.config(bg=self.error)
+        else:
+            self.error = old
 
         self.focus_force()
 
     def getLineColour(self, *args, **kwargs):
-        self.line = askcolor(parent=self, color=self.line)[1]
+        old = self.line
+        
+        self.line = askcolor(parent=self, color=self.line,
+                             title="Line Colour")[1]
 
-        self.lineButton.config(bg=self.line)
+        if self.line != None:
+            self.lineButton.config(bg=self.line)
+        else:
+            self.line = old
+
+        self.focus_force()
+
+    def getStartColour(self, *args, **kwargs):
+        old = self.start
+        
+        self.start = askcolor(parent=self, color=self.start,
+                              title="Start Colour")[1]
+
+        if self.start != None:
+            self.startButton.config(bg=self.start)
+        else:
+            self.start = old
 
         self.focus_force()
         
     def setStyle(self, *args, **kwargs):
         self.style = {"size": self.sizes[self.sizeCombo.get()],
-                      "colour": self.colour, "error": self.error,
-                      "line": self.line}
+                      "width": self.widthCombo.get(), "colour": self.colour,
+                      "error": self.error, "line": self.line,
+                      "start": self.start}
 
     def getStyle(self, *args, **kwargs):
         return self.style
